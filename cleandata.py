@@ -4,21 +4,22 @@ import numpy as np
 import pandas as pd
 
 def NASDAQ_csv_input(file_name,file_path):
-    # ---------------------------------------------------------------------------------------------
-    # Converts NASDAQ stock csv files from https://www.nasdaq.com/market-activity/quotes/historical
-    # to pd.dataframe[date, open, high, low, close, volume] 
-    # with dtypes[Datetime,np.float32, np.float32, np.float32, np.float32, np.float32, np.int)
-    # in ascentding order
-    #----------------------------------------------------------------------------------------------
-    ## Parameters:
-    ###-----------------------------------------------------------------------------------------------
-    ### file_name: string name of full file name
-    ### file_path: string name of full path to file
-    ###----------------------------------------------------------------------------------------------
-    ## Returns:
-    ###----------------------------------------------------------------------------------------------
-    ### pd.dataframe
-
+    """
+    ---------------------------------------------------------------------------------------------
+    Converts NASDAQ stock csv files from https://www.nasdaq.com/market-activity/quotes/historical
+    to pd.dataframe[date, open, high, low, close, volume] 
+    with dtypes[Datetime,np.float32, np.float32, np.float32, np.float32, np.float32, np.int)
+     in ascentding order
+    ----------------------------------------------------------------------------------------------
+    Parameters:
+    -----------------------------------------------------------------------------------------------
+    file_name: string name of full file name
+    file_path: string name of full path to file
+    ----------------------------------------------------------------------------------------------
+    Returns:
+    ----------------------------------------------------------------------------------------------
+    pd.dataframe
+    """
     # Import File
     df_ohlcv = pd.read_csv(f'{file_path}/{file_name}').iloc[::-1].reset_index()
 

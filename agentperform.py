@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-def agent_stock_performance(stock_price_ts, trade_ts,stock_name, agent_name):
+def agent_stock_performance(stock_price_ts: np.ndarray, trade_ts: np.ndarray,stock_name: str, agent_name:str):
     # ---------------------------------------------------------------------------------------------
     # Converts NASDAQ stock csv files from https://www.nasdaq.com/market-activity/quotes/historical
     # to pd.dataframe[date, open, high, low, close, volume] 
@@ -51,7 +51,7 @@ def agent_stock_performance(stock_price_ts, trade_ts,stock_name, agent_name):
     # Calculating Win, Loss, Total Trades
     trade_wins = np.sum(stock_price_ts[buy_price_idx] < stock_price_ts[sell_price_idx])
     trade_loss = np.sum(stock_price_ts[buy_price_idx] > stock_price_ts[sell_price_idx])
-    trade_total = len(buy_price_idx) + len(sell_price_idx)
+    trade_total = int((len(buy_price_idx) + len(sell_price_idx))/2) #Function assumes trade_ts has proper buy-sell patterns 
     trade_return = np.prod(stock_price_ts[sell_price_idx] / stock_price_ts[buy_price_idx])
     win_precentage = trade_wins/trade_total*100
     
@@ -84,7 +84,7 @@ def agent_stock_performance(stock_price_ts, trade_ts,stock_name, agent_name):
     plt.xlabel('Time Step')
     
     plotbox_x = ((np.median(trade_ts) - min(trade_ts))/0.85) + min(trade_ts)
-    plotbox_y = ((np.median(stock_price_ts) - min(stock_price_ts))/2.75) + min(stock_price_ts)
+    plotbox_y = ((np.median(stock_price_ts) + min(stock_price_ts))/4.75) + min(stock_price_ts)
         
     texbox_content = (f"Trades:{trade_total:>5}\n"
         f"Wins:{trade_wins:>8}\n"
@@ -105,6 +105,6 @@ def agent_stock_performance(stock_price_ts, trade_ts,stock_name, agent_name):
                "n_wins": trade_wins, 
                "n_losses": trade_loss, 
                "win_percentage":win_precentage, 
-               "ror":ror}
+               "ror":trade_return}
 
     return results
