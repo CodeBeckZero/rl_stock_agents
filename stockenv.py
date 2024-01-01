@@ -3,15 +3,14 @@ from gym import spaces
 import numpy as np
 import pandas as pd
 
-class DiscretizedOHLCVEnv(gym.Env):
+
+class ContinuousOHLCVEnv(gym.Env):
        
-    def __init__(self, ohlcv_data,bins_per_feature:list,initial_cash=1000):
+    def __init__(self, ohlcv_data,initial_cash=1000):
         self.ohlcv_raw_data = ohlcv_data
         self.initial_cash = initial_cash
-        self.bins_per_feature = bins_per_feature
         self.action_space = spaces.Discrete(3, start=-1) # -1: Sell, 0: Hold, 1: Buy
-        self.observation_space = spaces.MultiDiscrete([bins_per_feature] * len(ohlcv_data[0])) # Shape = (Open, High, Low, Close, Volume)
-        self.ohlcv_binned_data = self.discretize_ohlcv(self.ohlcv_raw_data,self.bins_per_feature)
+        self.observation_space = spaces.Box(low=0, high=np.inf, shape=(5,))
         self.max_idx = ohlcv_data.shape[0] -1 
         self.reset()
 
@@ -30,12 +29,12 @@ class DiscretizedOHLCVEnv(gym.Env):
         prev_valuation = self.total_portfolio_value
         step_data = {
             'Step': self.current_step,
-            'Portfolio Value': self.total_portfolio_value,
-            'Cash': self.cash_in_hand,
-            'Stock Value': self.stock_price * self.stock_holding, 
-            'Stock Holdings': self.stock_holding,
-            'Stock Price': self.stock_price,
-            'Input': self.ohlcv_binned_data[self.current_step],
+            'Portfolio Value': np.round(self.total_portfolio_value,2),
+            'Cash': np.round(self.cash_in_hand,2),
+            'Stock Value': np.round(self.stock_price * self.stock_holding,2), 
+            'Stock Holdings': np.round(self.stock_holding,0),
+            'Stock Price': np.round(self.stock_price,2),
+            #'Input': self.ohlcv_raw_data[self.current_step],
             "Available Actions": self.available_actions,
             "Action": action
         }
@@ -59,7 +58,7 @@ class DiscretizedOHLCVEnv(gym.Env):
         
         
         self.step_info.append(step_data)
-        #print(step_data)
+        
 
         if not done:
             self.current_step += 1
@@ -71,11 +70,9 @@ class DiscretizedOHLCVEnv(gym.Env):
             else:
                 self.available_actions = (0,)
 
-        
-
         next_observation = self.get_observation()
 
-        return next_observation, reward, done
+        return next_observation, reward, self.available_actions, done
     
     def _buy(self):
         self.num_stocks_buy = np.floor(self.cash_in_hand/self.stock_price) # Buy Maximum allowed (Current Method)
@@ -91,6 +88,103 @@ class DiscretizedOHLCVEnv(gym.Env):
         self.stock_holding -= self.num_stocks_sell
         self.num_stocks_sell = 0
         self.available_actions = (0,1)
+        return
+ 
+    def get_observation(self):
+        return(tuple(self.ohlcv_raw_data[self.current_step]))
+
+    def get_step_data(self):
+        return pd.DataFrame(self.step_info)  # Generate a DataFrame from stored step information
+
+class DiscretizedOHLCVEnv(gym.Env):
+       
+    def __init__(self, ohlcv_data:pd.DataFrame,bins_per_feature:list,initial_cash=1000):
+        self.ohlcv_raw_data = ohlcv_data
+        self.initial_cash = initial_cash
+        self.bins_per_feature = bins_per_feature
+        self.actions = ('S','H','B') # Sell, Hold, Buy
+        self.action_space = spaces.Discrete(3)
+        self.observation_space = spaces.MultiDiscrete([bins_per_feature] * len(ohlcv_data[0])) # Shape = (Open, High, Low, Close, Volume)
+        self.ohlcv_binned_data = self.discretize_ohlcv(self.ohlcv_raw_data,self.bins_per_feature)
+        self.max_idx = ohlcv_data.shape[0] -1 
+        self.reset()
+
+    def reset(self):
+        self.current_step = 0
+        self.cash_in_hand = self.initial_cash
+        self.stock_holding = 0
+        self.step_info = []  # Initialize an empty list to store step information
+        self.stock_price = self.ohlcv_raw_data[self.current_step][3] #Stock price set to closing price
+        self.total_portfolio_value = self.cash_in_hand + (self.stock_holding * self.stock_price)
+        self.available_actions = ('H','B')
+    
+    def step(self, action):
+        assert action in self.available_actions, f'Action {action} not in {self.available_actions}'
+
+        prev_valuation = self.total_portfolio_value
+        step_data = {
+            'Step': self.current_step,
+            'Portfolio Value': self.total_portfolio_value,
+            'Cash': self.cash_in_hand,
+            'Stock Value': self.stock_price * self.stock_holding, 
+            'Stock Holdings': self.stock_holding,
+            'Stock Price': self.stock_price,
+            'Input': self.ohlcv_binned_data[self.current_step],
+            "Available Actions": self.available_actions,
+            "Action": action
+        }
+
+       
+        if action == 'S': # Sell
+            self._sell()
+
+        elif action == 'H': # Hold
+            pass
+   
+        elif action == "B": # Buy
+            self._buy()
+
+
+
+        self.total_portfolio_value = self.cash_in_hand + (self.stock_holding * self.stock_price)
+        reward = self.total_portfolio_value - prev_valuation
+
+        done = self.current_step >= (len(self.ohlcv_raw_data)- 1)
+        
+        
+        self.step_info.append(step_data)
+        #print(step_data)
+
+        if not done:
+            self.current_step += 1
+            self.stock_price = self.ohlcv_raw_data[self.current_step][3] ## Assuming Closing price for stock price, 2nd place implemented...need to simplify
+        
+        if self.current_step == (self.max_idx - 1):
+            if self.stock_holding > 0:
+                self.available_actions = ('S',)
+            else:
+                self.available_actions = ('H',)
+
+        
+
+        next_observation = self.get_observation()
+
+        return next_observation, reward, done
+    
+    def _buy(self):
+        self.num_stocks_buy = np.floor(self.cash_in_hand/self.stock_price) # Buy Maximum allowed (Current Method)
+        self.cash_in_hand -= self.num_stocks_buy * self.stock_price
+        self.stock_holding = self.num_stocks_buy
+        self.num_stocks_buy = 0
+        self.available_actions = ('S','H')
+        return
+    
+    def _sell(self):
+        self.num_stocks_sell = self.stock_holding # Sell all stocks (Current Mehtod)
+        self.cash_in_hand += self.num_stocks_sell * self.stock_price  # No commission fee can be added later
+        self.stock_holding -= self.num_stocks_sell
+        self.num_stocks_sell = 0
+        self.available_actions = ('H','B')
         return
     
 

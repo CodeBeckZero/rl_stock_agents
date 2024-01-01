@@ -33,12 +33,12 @@ def agent_stock_performance(stock_price_ts: np.ndarray, trade_ts: np.ndarray,sto
 
         
     # Finding index and stock price of Buy Action
-    buy_price_idx = np.where(trade_ts == 1)[0]
+    buy_price_idx = np.where(trade_ts == 'B')[0]
     buy_price_idx = buy_price_idx.astype(int)
     buy_price = stock_price_ts[buy_price_idx]
 
     # Finding index and stock price of Sell Action
-    sell_price_idx = np.where(trade_ts == -1)[0]
+    sell_price_idx = np.where(trade_ts == 'S')[0]
     sell_price_idx = sell_price_idx.astype(int)
     sell_price = stock_price_ts[sell_price_idx]
 
@@ -72,8 +72,8 @@ def agent_stock_performance(stock_price_ts: np.ndarray, trade_ts: np.ndarray,sto
 
     trade_return = np.prod(ror_per_tradeframe)
     
-    hl_start = np.where(trade_ts == 1)[0]
-    hl_end = np.where(trade_ts == -1)[0]
+    hl_start = np.where(trade_ts == 'B')[0]
+    hl_end = np.where(trade_ts == 'S')[0]
 
     for start, end in zip(hl_start, hl_end):
         color = 'grey' if stock_price_ts[start] == stock_price_ts[end] else ('g' if stock_price_ts[start] < stock_price_ts[end] else 'r')
@@ -83,8 +83,8 @@ def agent_stock_performance(stock_price_ts: np.ndarray, trade_ts: np.ndarray,sto
     plt.ylabel(f'{stock_name} Price')
     plt.xlabel('Time Step')
     
-    plotbox_x = ((np.median(trade_ts) - min(trade_ts))/0.85) + min(trade_ts)
-    plotbox_y = ((np.median(stock_price_ts) + min(stock_price_ts))/4.75) + min(stock_price_ts)
+    plotbox_x = 10
+    plotbox_y = np.median(stock_price_ts) - (min(stock_price_ts)/4.75) 
         
     texbox_content = (f"Trades:{trade_total:>5}\n"
         f"Wins:{trade_wins:>8}\n"
