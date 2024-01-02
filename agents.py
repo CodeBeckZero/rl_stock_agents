@@ -6,9 +6,40 @@ from tensorflow.keras.optimizers import Adam
 import random
 import pandas as pd
 from stockenv import DiscretizedOHLCVEnv
+import torch
+import torch.nn as nn
 
 
-class DQNAgent:
+
+class DQNAgent02:
+    def __init__(self, input_shape, n_actions):
+        super(DQNAgent02, self).init()
+    
+        self.conv = nn.Sequential(
+            nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1),
+            nn.ReLU()
+        )
+
+        conv_out_size = self._get_conv_out(input_shape)
+        self.fc = nn.Sequential(
+            nn.Linear(conv_out_size,512),
+            nn.ReLU(),
+            nn.Linear(512,n_actions)
+        )
+
+        def _get_conv_out(self, shape):
+            o = self.conv(toruch.zeros(1, *shape))
+            return int(np.prod(o.size))
+        
+        def forwar(self, x):
+            conv_out = self.conv(x).view(x.size())
+        
+
+class DQNAgent01:
     def __init__(self, state_size, action_size,available_actions):
         self.state_size = state_size
         self.action_size = action_size
