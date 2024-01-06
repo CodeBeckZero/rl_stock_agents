@@ -1,92 +1,170 @@
 import numpy as np
-from collections import deque, defaultdict
-from tensorflow.keras import Sequential
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.optimizers import Adam
+from collections import deque, defaultdict, namedtuple
+#from tensorflow.keras import Sequential
+#from tensorflow.keras.layers import Dense
+#from tensorflow.keras.optimizers import Adam
 import random
 import pandas as pd
-from stockenv import DiscretizedOHLCVEnv
-import torch
-import torch.nn as nn
+from stockenv import DiscretizedOHLCVEnv, ContinuousOHLCVEnv
+#import torch
+#import torch.nn as nn
 
 
 
-class DQNAgent02:
-    def __init__(self, input_shape, n_actions):
-        super(DQNAgent02, self).init()
-    
+
+"""class DQNAgent02:
+    def __init__(self, 
+                 ohlcv_data: pd.DataFrame, 
+                 training_idxs:list,
+                 num_training_episodes:int,
+                 testing_idxs:list,
+                 n_actions: int = 3,
+                 buffer_size: int = 1000,
+                 batch_size: int = 10,
+                 epsilon: float = 0.1,
+                 alpha: float = 0.1,
+                 gamma: float = 0.9,
+                 device: str = 'cpu') -> None:
+
+        # Agent Parameters
+        self.epsilon = epsilon    ## Eplsion-greed parameter for exploration vs. exploitation
+        self.alpha = alpha        ## learning rate
+        self.gamma = gamma        ## Discount factor for future rewards
+        self.state = None
+
+        # Training Parameters
+        self.training_range = training_idxs
+        self.num_training_episodes = num_training_episodes
+
+        # Testing Parameters
+        self.test_range = testing_idxs
+
+        # Buffer 
+        class ExperienceBuffer:
+            def __init__(self,capacity: int) -> None:
+                self.buffer = deque(maxlen=capacity)
+            
+            def __len__(self):
+                return len(self.buffer)
+            
+            def append(self,experience):
+                self.buffer.append(experience)
+            
+            def sample(self, batch_size):
+                indices = random.choice(len(self.buffer), batch_size,
+                                            replace=False)
+                states, actions, rewards, dones, next_states = \
+                    zip(*[self.buffer[idx] for idx in indices])
+                return np.array(states), np.array(actions), \
+                        np.array(rewards, dtype=np.float32), \
+                        np.array(dones, dtype=np.uint8), \
+                        np.array(next_states)
+        
+        Experience = namedtuple('Experience', field_names=['state','action',
+                                                           'reward','done',
+                                                           'new_state'])
+
+        self.exp_buffer = ExperienceBuffer(buffer_size)
+        self.batch_size = batch_size #added to keep line 138 going                           
+        # Machine Parameters:
+        self.device = device    ## Device which will compute tensors 
+        
+        # Agent NN
+        self.input_shape = ohlcv_data.shape[1]
+
         self.conv = nn.Sequential(
-            nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4),
+            nn.Conv2d(self.input_shape, 32, kernel_size=8, stride=4),
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=4, stride=2),
             nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, stride=1),
             nn.ReLU()
         )
+        conv_out_size = self._get_conv_out(self.input_shape)
 
-        conv_out_size = self._get_conv_out(input_shape)
         self.fc = nn.Sequential(
-            nn.Linear(conv_out_size,512),
-            nn.ReLU(),
-            nn.Linear(512,n_actions)
-        )
+                nn.Linear(conv_out_size,512),
+                nn.ReLU(),
+                nn.Linear(512,n_actions)
+            )
 
         def _get_conv_out(self, shape):
-            o = self.conv(toruch.zeros(1, *shape))
+            o = self.conv(torch.zeros(1, *shape))
             return int(np.prod(o.size))
-        
-        def forwar(self, x):
+            
+        def forward(self, x):
             conv_out = self.conv(x).view(x.size())
         
+        # Initialize Enviroment. 
+        self.env = ContinuousOHLCVEnv(
+            ohlcv_data[["open","high","low",'close',"volume"]].to_numpy()) 
 
-class DQNAgent01:
-    def __init__(self, state_size, action_size,available_actions):
-        self.state_size = state_size
-        self.action_size = action_size
-        self.available_actions = available_actions
-        self.memory = deque(maxlen=2000)
-        self.gamma = 0.95  # Discount rate
-        self.epsilon = 0.5  # Exploration rate
-        self.epsilon_min = 0.01
-        self.epsilon_decay = 0.995
-        self.learning_rate = 0.001
-        self.model = self._build_model()
+    
 
-    def _build_model(self):
-        model = Sequential()
-        model.add(Dense(24, input_shape=(self.state_size,), activation='relu'))
-        model.add(Dense(24, activation='relu'))
-        model.add(Dense(self.action_size, activation='linear'))
-        model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
-        return model
+        @torch.no_grad()
+        def _play_step(self,initial_epsilon, 
+                       final_epsilon, 
+                       training_episode, 
+                       device):
+            # Choose action using epsilon-greedy policy
+            if np.random.rand() < self._epsilon_decay(training_episode,
+                                                    self.num_training_episodes,
+                                                    initial_epsilon,
+                                                    final_epsilon)                                                  : # Explore
+                action = random.choice(self.env.available_actions) ## letter action
+            else:
+                state_a = np.array([self.state], copy=False)
+                state_v = torch.tensor(state_a).to(device)
+                q_vals_v = net(state_v) ## to figure out net
+                _, act_v = torch.max(q_vals_v, dim=1) ## need to check this
+                action = self.env.idx_to_action_dic[int(act_v.item())] #need to check if assigned properly
 
-    def remember(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done))
 
-    def act(self, state):
-        if np.random.rand() <= self.epsilon:
-            action_type = 'Exploration'
-            return random.choice(self.available_actions), action_type
-        action_type = 'Expliotation'
-        act_values = self.model.predict(state)
-        possible_act_value_idx = [act - 1 for act in self.available_actions]
-        max_value = np.max(act_values[possible_act_value_idx])
-        max_indices = [i for i, q_value in enumerate(act_values) if abs(q_value - max_value) < 1e-8]
-        valid_max_indices = list(set(possible_act_value_idx).intersection(set(max_indices)))
-        print(act_values,valid_max_indices)
-        return np.argmax(act_values[0]), action_type
+            old_state = self.state
+            new_state, reward, is_done = self.env.step(action) ## not clear that letter action is correct for replay
 
-    def replay(self, batch_size):
-        minibatch = random.sample(self.memory, batch_size)
-        for state, action, reward, next_state, done in minibatch:
-            target = reward
-            if not done:
-                target = reward + self.gamma * np.amax(self.model.predict(next_state)[0])
-            target_f = self.model.predict(state)
-            target_f[0][action] = target
-            self.model.fit(state, target_f, epochs=1, verbose=0)
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+            exp = Experience(self.state, action, reward, is_done, new_state)
+
+            self.exp_buffer.append(exp)
+            self.state = new_state
+            
+            if is_done:
+                self.env.reset()
+                self.state = None
+            else:
+                self.state = new_state
+            return old_state, action, reward, new_state
+        
+        def calc_loss(batch, net, tgt_net, device, states, actions, 
+                      rewards, dones, next_states = self.batch_size): #added self.batch_size to keep going
+            states_v = torch.tensor(np.array(states, copy=False)).to(device)
+            next_states_v = torch.tensor(np.array(next_states,
+                                         copy=False)).to(device)
+            actions_v = torch.tensor(actions).to(device)
+            rewards_v = torch.tensor(rewards).to(device)
+            done_mask = torch.BoolTensor(dones).to(device)
+
+            state_action_values = net(states_v).gather(\
+                1, actions_v.unsqueeze(-1)).squeez(-1) ##see page 151
+            
+            next_state_values = tgt_net(next_states_v).max(1)[0]
+
+            next_state_values[done_mask] = 0.0 ## Needed for convergence 
+
+            next_state_values = next_state_values.detach() ## prevents gradients flowing into NN
+
+            expected_state_action_values = next_state_values * self.gamma + \
+                rewards_v
+
+            return nn.MSELoss()(state_action_values,expected_state_action_values)
+
+        def _epsilon_decay(self,current_epoch, total_epochs, initial_epsilon, final_epsilon):
+            decay_rate = np.log(final_epsilon / initial_epsilon) / total_epochs
+            epsilon = initial_epsilon * np.exp(-decay_rate * current_epoch)
+            return epsilon"""
+
+       
+  
 
 class Discrete_QtabAgent:
     def __init__(self,ohlcv_data:pd.DataFrame,
@@ -133,12 +211,13 @@ class Discrete_QtabAgent:
         old_state = self.state
         new_state, reward, is_done = self.env.step(action)
         
-        if is_done:
+        """if is_done:
             self.env.reset()
             self.state = None
+
         else:
-            self.state = new_state
-        return old_state, action, reward, new_state
+            self.state = new_state"""
+        return old_state, action, reward, new_state, is_done
     
     def best_value_and_action(self,state):
         best_value, best_action = None, None
@@ -162,7 +241,7 @@ class Discrete_QtabAgent:
         if initial_epsilon is None:
             initial_epsilon = self.epsilon
         if final_epsilon is None:
-            final_epsilon = self.epsilon
+            final_epsilon = self.epsilon        
 
         training_episode = 1
                 
@@ -179,7 +258,9 @@ class Discrete_QtabAgent:
         else:
             initial_epsilon = test_epsilon
             final_epsilon = test_epsilon
-            
+        
+        
+        
         self._play_episode(start_idx,end_idx,initial_epsilon,final_epsilon,1)
   
 
@@ -187,25 +268,30 @@ class Discrete_QtabAgent:
         total_reward = 0.0
 
         self.env.reset()
-        self.env.current_step = start_idx
-        self.env.max_idx = final_idx
-        state = self.env.get_observation()
-
-               
+        self.env.update_idx(start_idx,final_idx-1)
+        state = self.env.get_observation()  
         is_done = False
         while not is_done:
-            state, action, reward, new_state = self.sample_env(initial_epsilon, 
+            state, action, reward, new_state, end = self.sample_env(initial_epsilon, 
                                                                final_epsilon, 
                                                                training_episode)
             _, action = self.best_value_and_action(state)
             self.value_update(state, action, reward, new_state)
             total_reward += reward
-            if self.env.current_step == self.env.max_idx:
-                is_done = True
+            is_done = end
+            """if self.env.current_step == self.env.max_idx - 1: 
+
+                is_done = True"""
+
             state = new_state
+            
         return total_reward 
 
 
+    def reset(self):
+        
+        self.state = None
+        self.values = defaultdict(float)
 
 
     def _epsilon_decay(self,current_epoch, total_epochs, initial_epsilon, final_epsilon):
@@ -217,11 +303,15 @@ class Discrete_Buy_Hold_Agent:
         
         def __init__(self,ohlcv_data:pd.DataFrame,
                      bins_per_feature:list = None,
+                     training_idxs: list = None,
                      testing_idxs:list = None) -> None:
         
             # Agent Paramters 
             self.state = None
-            
+
+            #Training Parameters 
+            self.training_range = training_idxs   ## Not used but needed for loop in test_bench
+
             # Testing Parameters
             self.test_range = testing_idxs
 
@@ -277,11 +367,15 @@ class Discrete_Random_Agent:
         
         def __init__(self,ohlcv_data:pd.DataFrame,
                      bins_per_feature:list = None,
+                     training_idxs:list = None,
                      testing_idxs:list = None) -> None:
         
             # Agent Paramters 
             self.state = None
             
+            # Training Parameters
+            self.training_range = training_idxs   ## Not used but needed for loop in test_bench
+
             # Testing Parameters
             self.test_range = testing_idxs
 
@@ -290,7 +384,7 @@ class Discrete_Random_Agent:
                                          bins_per_feature)
             
         
-        def sample_env(self,start_idx,final_idx):
+        def sample_env(self):
             # Choose action using epsilon-greedy policy
 
             action = random.choice(self.env.available_actions)
@@ -298,15 +392,15 @@ class Discrete_Random_Agent:
             old_state = self.state
             new_state, reward, is_done = self.env.step(action)
             
-            if is_done:
+            """if is_done:
                 self.env.reset()
                 self.state = None
             else:
-                self.state = new_state
-            return old_state, action, reward, new_state
+                self.state = new_state"""
+            return old_state, action, reward, new_state, is_done
         
         def test(self, start_idx, end_idx):
-            self.env.current_step = start_idx  
+            
             self._play_episode(start_idx,end_idx)
   
 
@@ -314,18 +408,19 @@ class Discrete_Random_Agent:
             total_reward = 0.0
 
             self.env.reset()
-            self.env.current_step = start_idx
-            self.env.max_idx = final_idx
-            state = self.env.get_observation()
-
-                
+            self.env.update_idx(start_idx,final_idx-1)
+            state = self.env.get_observation()  
+                            
             is_done = False
             while not is_done:
-                _, _, reward, _ = self.sample_env(start_idx,final_idx)
+                _, _, reward, _, end = self.sample_env()
                 total_reward += reward
-                if self.env.current_step == self.env.max_idx:
-                    is_done = True
-
+                is_done = end
+        
             return total_reward 
+        
+        def reset(self):
+            self.state = None
+
 
 
