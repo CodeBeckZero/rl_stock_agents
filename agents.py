@@ -169,6 +169,7 @@ from stockenv import DiscretizedOHLCVEnv, ContinuousOHLCVEnv
 class Discrete_QtabAgent:
     def __init__(self,ohlcv_data:pd.DataFrame,
                  bins_per_feature:list,
+                 bin_padding:float,
                  training_idxs:list,
                  num_training_episodes:int,
                  testing_idxs:list,
@@ -196,7 +197,7 @@ class Discrete_QtabAgent:
 
         #Initialize Enviroment. 
         self.env = DiscretizedOHLCVEnv(ohlcv_data[["open","high","low",'close',"volume"]].to_numpy(), 
-                                         bins_per_feature)
+                                         bins_per_feature,bin_padding)
 
     def sample_env(self,initial_epsilon, final_epsilon, training_episode):
         # Choose action using epsilon-greedy policy
@@ -211,12 +212,6 @@ class Discrete_QtabAgent:
         old_state = self.state
         new_state, reward, is_done = self.env.step(action)
         
-        """if is_done:
-            self.env.reset()
-            self.state = None
-
-        else:
-            self.state = new_state"""
         return old_state, action, reward, new_state, is_done
     
     def best_value_and_action(self,state):
@@ -366,7 +361,8 @@ class Discrete_Buy_Hold_Agent:
 class Discrete_Random_Agent:
         
         def __init__(self,ohlcv_data:pd.DataFrame,
-                     bins_per_feature:list = None,
+                     bins_per_feature:list,
+                     bin_padding:float,
                      training_idxs:list = None,
                      testing_idxs:list = None) -> None:
         
@@ -381,7 +377,7 @@ class Discrete_Random_Agent:
 
             #Initialize Enviroment. 
             self.env = DiscretizedOHLCVEnv(ohlcv_data[["open","high","low",'close',"volume"]].to_numpy(), 
-                                         bins_per_feature)
+                                         bins_per_feature,bin_padding)
             
         
         def sample_env(self):

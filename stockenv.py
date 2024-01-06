@@ -129,14 +129,17 @@ class ContinuousOHLCVEnv(gym.Env):
 class DiscretizedOHLCVEnv(gym.Env):
        
     def __init__(self, ohlcv_data:pd.DataFrame,bins_per_feature:list,
-                 commission_rate: float = 0.005, initial_cash=1000000):
+                 bin_padding: float = 0.0, commission_rate: float = 0.005, 
+                 initial_cash=1000000):
         self.ohlcv_raw_data = ohlcv_data
         self.initial_cash = initial_cash
         self.bins_per_feature = bins_per_feature
         self.actions = ('S','H','B') # Sell, Hold, Buy
         self.action_space = spaces.Discrete(3)
         self.observation_space = spaces.MultiDiscrete([bins_per_feature] * len(ohlcv_data[0])) # Shape = (Open, High, Low, Close, Volume)
-        self.ohlcv_binned_data = self.discretize_ohlcv(self.ohlcv_raw_data,self.bins_per_feature)
+        self.ohlcv_binned_data = self.discretize_ohlcv(self.ohlcv_raw_data,
+                                                       self.bins_per_feature,
+                                                       bin_padding)
         self.max_idx = ohlcv_data.shape[0] -1
         self.finish_idx = self.max_idx
         self.start_idx = 0
@@ -247,11 +250,11 @@ class DiscretizedOHLCVEnv(gym.Env):
     def get_step_data(self):
         return pd.DataFrame(self.step_info)  # Generate a DataFrame from stored step information
 
-    def discretize_ohlcv(self, data, bins_for_feature):
+    def discretize_ohlcv(self, data, bins_for_feature, bin_padding):
         discretized_data = []
         for column,num_bins in zip(data.T, bins_for_feature):  # Transpose to iterate through columns
-            min_val = np.min(column)
-            max_val = np.max(column)
+            min_val = np.min(column) * ( 1 - bin_padding)
+            max_val = np.max(column) * ( 1 + bin_padding)
             bin_width = (max_val - min_val) / num_bins
             bins = [min_val + i * bin_width for i in range(num_bins)]
             digitized = np.digitize(column, bins)

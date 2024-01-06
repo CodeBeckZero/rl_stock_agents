@@ -89,7 +89,7 @@ def generate_ranks(row,equal_rank_behav='mean'):
     ----------------------------------------------------------------------------------------------
     """  
     # Generate ranks from data
-    row_ranks = row.rank(method='max', ascending=False).astype(int) 
+    row_ranks = row.rank(method='min', ascending=False).astype(int) 
     #  All Equal Rank behavior 
     ## Aggeration Function Dictionary for behavior when all ranks are the same
     # Generate indices based on the length of 'row'
