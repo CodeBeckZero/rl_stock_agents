@@ -128,7 +128,8 @@ class ContinuousOHLCVEnv(gym.Env):
 
 class DiscretizedOHLCVEnv(gym.Env):
        
-    def __init__(self, ohlcv_data:pd.DataFrame,bins_per_feature:list,initial_cash=1000000):
+    def __init__(self, ohlcv_data:pd.DataFrame,bins_per_feature:list,
+                 commission_rate: float = 0.005, initial_cash=1000000):
         self.ohlcv_raw_data = ohlcv_data
         self.initial_cash = initial_cash
         self.bins_per_feature = bins_per_feature
@@ -139,11 +140,14 @@ class DiscretizedOHLCVEnv(gym.Env):
         self.max_idx = ohlcv_data.shape[0] -1
         self.finish_idx = self.max_idx
         self.start_idx = 0
+        self.commission_rate = commission_rate
         self.reset()
 
     def reset(self):
         self.current_step = self.start_idx
         self.cash_in_hand = self.initial_cash
+        self.last_commission_cost = 0
+        self.total_commission_cost = 0
         self.stock_holding = int(0)
         self.step_info = []  # Initialize an empty list to store step information
         self.stock_price = self.ohlcv_raw_data[self.current_step][3] #Stock price set to closing price
@@ -163,11 +167,13 @@ class DiscretizedOHLCVEnv(gym.Env):
         step_data = {
             'Step': self.current_step - self.start_idx + 1,
             'idx': self.current_step,
-            'Portfolio Value': self.total_portfolio_value,
+            'Portfolio Value': self.total_portfolio_value, 
             'Cash': self.cash_in_hand,
             'Stock Value': self.stock_price * self.stock_holding, 
             'Stock Holdings': self.stock_holding,
             'Stock Price': self.stock_price,
+            "Last Commission Cost": self.last_commission_cost,
+            'Total Commision Cost': self.total_commission_cost,
             'Input': self.ohlcv_binned_data[self.current_step],
             "Available Actions": self.available_actions,
             "Action": action
@@ -178,6 +184,7 @@ class DiscretizedOHLCVEnv(gym.Env):
             self._sell()
 
         elif action == 'H': # Hold
+            self.last_commission_cost = 0
             pass
    
         elif action == "B": # Buy
@@ -203,13 +210,7 @@ class DiscretizedOHLCVEnv(gym.Env):
             if int(self.stock_holding) > 0:
                 self.available_actions = ('S',)
             else:
-                self.available_actions = ('H',)
-        
-        """if self.current_step == (self.finish_idx) and int(self.stock_holding) > 0:
-            warnings.warn("Automatic sell action at last timestep, agent did not perform sell action in max_idx - 1")
-            self._sell()"""
-
-        
+                self.available_actions = ('H',)       
 
         next_observation = self.get_observation()
 
@@ -217,15 +218,18 @@ class DiscretizedOHLCVEnv(gym.Env):
     
     def _buy(self):
         self.num_stocks_buy = int(np.floor(self.cash_in_hand/self.stock_price)) # Buy Maximum allowed (Current Method)
-        self.cash_in_hand -= self.num_stocks_buy * self.stock_price
+        self.last_commission_cost = self.num_stocks_buy * self.stock_price * self.commission_rate
+        self.total_commission_cost += self.last_commission_cost
+        self.cash_in_hand -= self.num_stocks_buy * self.stock_price - self.last_commission_cost
         self.stock_holding = self.num_stocks_buy
-        self.num_stocks_buy = 0
         self.available_actions = ('S','H')
         return
     
     def _sell(self):
         self.num_stocks_sell = self.stock_holding # Sell all stocks (Current Mehtod)
-        self.cash_in_hand += self.num_stocks_sell * self.stock_price  # No commission fee can be added later
+        self.last_commission_cost = self.num_stocks_sell * self.stock_price * self.commission_rate
+        self.total_commission_cost += self.last_commission_cost
+        self.cash_in_hand += self.num_stocks_sell * self.stock_price - self.last_commission_cost
         self.stock_holding -= self.num_stocks_sell
         self.num_stocks_sell = 0
         self.available_actions = ('H','B')

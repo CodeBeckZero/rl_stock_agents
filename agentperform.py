@@ -6,7 +6,9 @@ import logging
 
 def agent_stock_performance(stock_price_ts: np.ndarray, trade_ts: np.ndarray,
                             stock_name: str, agent_name:str, 
-                            display_graph: bool = False):
+                            display_graph: bool = False, 
+                            save_graphic: bool = False,
+                            path_file = None):
     # ---------------------------------------------------------------------------------------------
     # Converts NASDAQ stock csv files from https://www.nasdaq.com/market-activity/quotes/historical
     # to pd.dataframe[date, open, high, low, close, volume] 
@@ -123,7 +125,7 @@ def agent_stock_performance(stock_price_ts: np.ndarray, trade_ts: np.ndarray,
             'buy_hold': bh_return}
 
 
-    if display_graph == False:    
+    if display_graph is False and save_graphic is False:    
         return results
     
     # Ploting Stock Price and locations of Buy and Sell Actions
@@ -143,7 +145,7 @@ def agent_stock_performance(stock_price_ts: np.ndarray, trade_ts: np.ndarray,
 
     plt.title(f'{agent_name}: {stock_name} Trade Performance')
     plt.ylabel(f'{stock_name} Price')
-    plt.xlabel('Time Step')
+    plt.xlabel('Time Step$_{Test\ Range}$ ')
     
     # Positioning of Performance Number Text
     # Manual identification of stocks that require test located else where
@@ -182,7 +184,17 @@ def agent_stock_performance(stock_price_ts: np.ndarray, trade_ts: np.ndarray,
             ha='left',
             va='bottom',
             fontsize=8)      
-    plt.show()
+    if save_graphic:
+        assert path_file is not None, "No path/filename provided"
+
+        fig.savefig(path_file)
+
+        if not display_graph:
+            plt.close()
+            return results
     
+    plt.show()
+    plt.close()
+       
     return results
 

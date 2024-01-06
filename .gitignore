@@ -1,3 +1,6 @@
 example.log
 training_log.txt
 .vscode/settings.json
+__pycache__/agentperform.cpython-310.pyc
+__pycache__/stockenv.cpython-310.pyc
+.gitignore
