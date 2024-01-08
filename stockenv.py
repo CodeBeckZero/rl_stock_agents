@@ -103,7 +103,7 @@ class ContinuousOHLCVEnv(gym.Env):
         self.last_commission_cost = self.num_stocks_buy * self.stock_price * self.commission_rate
         self.total_commission_cost += self.last_commission_cost
         self.cash_in_hand -= self.num_stocks_buy * self.stock_price - self.last_commission_cost
-        self.stock_holding = self.num_stocks_buy
+        self.stock_holding += self.num_stocks_buy
         self.num_stocks_buy = 0
         self.available_actions = ('S','H')
         return

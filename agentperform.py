@@ -9,35 +9,35 @@ def agent_stock_performance(stock_price_ts: np.ndarray, trade_ts: np.ndarray,
                             display_graph: bool = False, 
                             save_graphic: bool = False,
                             path_file = None):
-    # ---------------------------------------------------------------------------------------------
-    # Converts NASDAQ stock csv files from https://www.nasdaq.com/market-activity/quotes/historical
-    # to pd.dataframe[date, open, high, low, close, volume] 
-    # with dtypes[Datetime,np.float32, np.float32, np.float32, np.float32, np.float32, np.int)
-    # in ascentding order
-    #----------------------------------------------------------------------------------------------
-    ## Parameters:
-    #-----------------------------------------------------------------------------------------------
-    #   stock_price_ts: (np.narray) 
-    #       1-D array with stock's price at each timestep 
-    #   trade_ts: (np.narray)
-    #       1-D array with agent's action at each time step. Action defined as [-1,0,1] as
-    #       [Sell, Hold, Buy] respectively.  
-    #   stock_name: (str)
-    #       Name of stock, for labeling of plot
-    #   agent_name: (str)
-    #       Name of agent, for labeling of plot
-    #----------------------------------------------------------------------------------------------
-    # Returns:
-    #----------------------------------------------------------------------------------------------
-    #   dict: dict.keys=["n_trades", "n_wins", "n_losses", "win_percentage", "ror"]
-    #       dictionary with agent's trade performance:
-    #           - number of trades
-    #           - number of winning trades
-    #           - number losing trades
-    #           - trade win percentage
-    #           - rate of return (product of all conducted trade returns)
-    # ----------------------------------------------------------------------------------------------  
+    """
+    Analyzes the trading performance of an agent on a stock dataset.
 
+    Parameters:
+    - stock_price_ts (np.ndarray): 1-D array with stock's price at each timestep.
+    - trade_ts (np.ndarray): 1-D array with agent's action at each time step. Actions defined as [-1, 0, 1] for [Sell, Hold, Buy] respectively.
+    - stock_name (str): Name of the stock, used for labeling plots.
+    - agent_name (str): Name of the agent, used for labeling plots.
+    - display_graph (bool, optional): Whether to display the generated plot. Defaults to False.
+    - save_graphic (bool, optional): Whether to save the plot as an image. Defaults to False.
+    - path_file (str, optional): Path to save the generated plot if save_graphic is True. Defaults to None.
+
+    Returns:
+    - dict: Dictionary containing agent's trade performance metrics:
+        - 'stock': Name of the stock.
+        - 'agent_name': Name of the agent.
+        - 'n_trades': Number of trades.
+        - 'n_wins': Number of winning trades.
+        - 'n_losses': Number of losing trades.
+        - 'win_percentage': Trade win percentage.
+        - 'cumulative_return': Cumulative return.
+        - 'sortino': Sortino ratio.
+        - 'max_drawdown': Maximum drawdown percentage.
+        - 'sharpe': Sharpe ratio.
+        - 'trade_dur_avg': Average duration of trades.
+        - 'trade_dur_min': Minimum duration of trades.
+        - 'trade_dur_max': Maximum duration of trades.
+        - 'buy_hold': Buy and Hold return.
+    """
     
         
     # Finding index and stock price of Buy Action
@@ -87,11 +87,28 @@ def agent_stock_performance(stock_price_ts: np.ndarray, trade_ts: np.ndarray,
             
             returns_list.append(trade_return)
         
+
+
         returns = pd.Series(returns_list)
         sharpe_ratio = qs.stats.sharpe(returns)
         mdd = qs.stats.max_drawdown(returns)*100
         cumulative_return = returns.add(1).prod()
         sortino_ratio = qs.stats.sortino(returns)
+
+        bad_values = [np.inf]
+
+        if sharpe_ratio in bad_values:
+            sharpe_ratio = 0
+        
+        if sortino_ratio in bad_values:
+            sortino_ratio = 0
+
+        if np.isnan(sharpe_ratio):
+            sharpe_ratio = 0
+
+        if np.isnan(sortino_ratio):
+            sortino_ratio = 0
+
     else: 
         trade_wins = 0
         trade_loss = 0

@@ -40,7 +40,6 @@ def iman_davenport_test(n_ranks_arr, confidence_level, arr_order='cols'):
     ----------------------------------------------------------------------------------------------  
     """
     # Check input for order of ranks in input array
-    
     arr_order_arwgs = ['cols','rows']
     assert arr_order in arr_order_arwgs, f'arr_order: invalid parameter, options: {arr_order_arwgs}'
     if arr_order == "cols": ## Internal arrays of dataset ranks for each classifier
@@ -65,7 +64,7 @@ def iman_davenport_test(n_ranks_arr, confidence_level, arr_order='cols'):
     return iman_davenport_stat, critical_f_value, reject_null_hypo
 
 
-def generate_ranks(row,equal_rank_behav='mean'):
+def generate_ranks(row, equal_rank_behav='mean', rank_order:str = 'max'):
     """
     ---------------------------------------------------------------------------------------------
     Generates ranks for a pd.DataFrame row
@@ -89,7 +88,7 @@ def generate_ranks(row,equal_rank_behav='mean'):
     ----------------------------------------------------------------------------------------------
     """  
     # Generate ranks from data
-    row_ranks = row.rank(method='min', ascending=False).astype(int) 
+    row_ranks = row.rank(method=rank_order, ascending=False).astype(int) 
     #  All Equal Rank behavior 
     ## Aggeration Function Dictionary for behavior when all ranks are the same
     # Generate indices based on the length of 'row'
@@ -120,7 +119,7 @@ def generate_ranks(row,equal_rank_behav='mean'):
     return row_ranks
 
 
-def generate_rank_array_from_dataframe(df, cols_to_rank_lst,equal_rank_behav='mean'):
+def generate_rank_array_from_dataframe(df, cols_to_rank_lst, equal_rank_behav:str ='mean', rank_order:str = 'max'):
     """
     ---------------------------------------------------------------------------------------------
     Generates a rank array on specified columns from a dataframe that contains the datasets as rows 
@@ -147,7 +146,7 @@ def generate_rank_array_from_dataframe(df, cols_to_rank_lst,equal_rank_behav='me
     ----------------------------------------------------------------------------------------------
     """  
     # Generate Ranks on specified columns
-    df_ranks = df[cols_to_rank_lst].apply(generate_ranks, args=(equal_rank_behav,), axis=1) 
+    df_ranks = df[cols_to_rank_lst].apply(generate_ranks, args=(equal_rank_behav,rank_order,), axis=1) 
     # Create array 
     rank_columns =[]
     for i,col in enumerate(cols_to_rank_lst): #F changes DF (feature or bug?)

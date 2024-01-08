@@ -201,10 +201,10 @@ class Discrete_QtabAgent:
 
     def sample_env(self,initial_epsilon, final_epsilon, training_episode):
         # Choose action using epsilon-greedy policy
-        if np.random.rand() < self._epsilon_decay(training_episode,
-                                                  self.num_training_episodes,
-                                                  initial_epsilon,
-                                                  final_epsilon)                                                  : # Explore
+        if np.random.rand() < self._linear_decay(initial_epsilon,
+                                                  final_epsilon,
+                                                  training_episode,
+                                                  self.num_training_episodes)                                                  : # Explore
             action = random.choice(self.env.available_actions)
         else:
             _ , action = self.best_value_and_action(self.state)
@@ -230,21 +230,29 @@ class Discrete_QtabAgent:
         self.values[(state,action)] = old_value * (1-self.alpha) + new_value * self.alpha
     
     
-    def train(self, start_idx, end_idx,initial_epsilon: float = None, 
+    def train(self, start_idx:int, 
+              end_idx:int,
+              initial_epsilon: float = None, 
               final_epsilon: float = None):
         
         if initial_epsilon is None:
-            initial_epsilon = self.epsilon
+            init_epsilon = self.epsilon
+        else:
+            init_epsilon = initial_epsilon
+        
         if final_epsilon is None:
-            final_epsilon = self.epsilon        
+            end_epsilon = self.epsilon        
+        else:
+            end_epsilon = final_epsilon
 
-        training_episode = 1
+        self.env.update_idx(start_idx,end_idx-1)
+        
                 
-        for _ in range(self.num_training_episodes):
-
-            self._play_episode(start_idx,end_idx,initial_epsilon,final_epsilon,training_episode)
-            training_episode += 1
-
+        for training_episode in range(1, self.num_training_episodes+1):
+            
+            self._play_episode(init_epsilon, end_epsilon,training_episode)
+            
+           
 
     def test(self, start_idx, end_idx, test_epsilon: float = None):
         if test_epsilon is None:
@@ -253,20 +261,22 @@ class Discrete_QtabAgent:
         else:
             initial_epsilon = test_epsilon
             final_epsilon = test_epsilon
+
+        self.env.update_idx(start_idx,end_idx-1)
         
-        
-        
-        self._play_episode(start_idx,end_idx,initial_epsilon,final_epsilon,1)
+        self._play_episode(initial_epsilon,final_epsilon,1)
   
 
-    def _play_episode(self,start_idx,final_idx, initial_epsilon, final_epsilon, training_episode):
+    def _play_episode(self,initial_epsilon, final_epsilon,training_episode):
         total_reward = 0.0
 
         self.env.reset()
-        self.env.update_idx(start_idx,final_idx-1)
+        
         state = self.env.get_observation()  
         is_done = False
+        current_run = 0
         while not is_done:
+            
             state, action, reward, new_state, end = self.sample_env(initial_epsilon, 
                                                                final_epsilon, 
                                                                training_episode)
@@ -274,9 +284,7 @@ class Discrete_QtabAgent:
             self.value_update(state, action, reward, new_state)
             total_reward += reward
             is_done = end
-            """if self.env.current_step == self.env.max_idx - 1: 
-
-                is_done = True"""
+            current_run += 1
 
             state = new_state
             
@@ -288,17 +296,38 @@ class Discrete_QtabAgent:
         self.state = None
         self.values = defaultdict(float)
 
+    def _linear_decay(self, initial_epsilon, final_epsilon, current_epoch, total_epochs):
+        if initial_epsilon == final_epsilon:
+            return initial_epsilon
+        else:
+            rate_of_change = (final_epsilon - initial_epsilon) / (total_epochs-1)
+            current_epsilon = np.round((initial_epsilon - rate_of_change) + (rate_of_change * current_epoch),3)
+            
+            if current_epsilon > initial_epsilon or current_epsilon < final_epsilon:
+                raise ValueError(f'Epsilon value ({current_epsilon}) out of valid range ({initial_epsilon}:{final_epsilon})')
+        
+            return current_epsilon
 
-    def _epsilon_decay(self,current_epoch, total_epochs, initial_epsilon, final_epsilon):
-        decay_rate = np.log(final_epsilon / initial_epsilon) / total_epochs
-        epsilon = initial_epsilon * np.exp(-decay_rate * current_epoch)
-        return epsilon
+    def _epsilon_decay(self, initial_epsilon, final_epsilon, current_epoch, total_epochs):
+        if initial_epsilon == final_epsilon:
+            return initial_epsilon
+        else:
+            print(f'init:{initial_epsilon}, final:{final_epsilon}, c:{current_epoch}, f:{total_epochs}' )
+            decay_rate = np.log((initial_epsilon / final_epsilon) * (current_epoch / total_epochs))
+            epsilon = np.exp(-decay_rate)
+
+            print(epsilon)
+            if epsilon > initial_epsilon or epsilon < final_epsilon:
+                raise ValueError("Epsilon value out of valid range")
+            
+            return epsilon
     
 class Discrete_Buy_Hold_Agent:
         
         def __init__(self,ohlcv_data:pd.DataFrame,
-                     bins_per_feature:list = None,
-                     training_idxs: list = None,
+                     bins_per_feature:list,
+                     bin_padding:float,
+                     training_idxs:list = None,
                      testing_idxs:list = None) -> None:
         
             # Agent Paramters 
@@ -312,31 +341,26 @@ class Discrete_Buy_Hold_Agent:
 
             #Initialize Enviroment. 
             self.env = DiscretizedOHLCVEnv(ohlcv_data[["open","high","low",'close',"volume"]].to_numpy(), 
-                                         bins_per_feature)
+                                         bins_per_feature,bin_padding)
             
         
-        def sample_env(self,start_idx,final_idx):
+        def sample_env(self,start_idx, final_idx):
             # Choose action using epsilon-greedy policy
             
             if self.env.current_step == start_idx:
                 action = 'B'
-            elif self.env.current_step != final_idx-1:
-                action = 'H'
-            else:
+            elif self.env.current_step == final_idx-1:
                 action = 'S'
+            else:
+                action = 'H'
 
             old_state = self.state
             new_state, reward, is_done = self.env.step(action)
             
-            if is_done:
-                self.env.reset()
-                self.state = None
-            else:
-                self.state = new_state
-            return old_state, action, reward, new_state
+            return old_state, action, reward, new_state, is_done
         
         def test(self, start_idx, end_idx):
-            self.env.current_step = start_idx  
+            
             self._play_episode(start_idx,end_idx)
   
 
@@ -344,19 +368,19 @@ class Discrete_Buy_Hold_Agent:
             total_reward = 0.0
 
             self.env.reset()
-            self.env.current_step = start_idx
-            self.env.max_idx = final_idx
-            state = self.env.get_observation()
-
-                
+            self.env.update_idx(start_idx,final_idx-1)
+            state = self.env.get_observation()  
+                            
             is_done = False
             while not is_done:
-                _, _, reward, _ = self.sample_env(start_idx,final_idx)
+                _, _, reward, _, end = self.sample_env(start_idx,final_idx)
                 total_reward += reward
-                if self.env.current_step == self.env.max_idx:
-                    is_done = True
-
+                is_done = end
+        
             return total_reward 
+        
+        def reset(self):
+            self.state = None
 
 class Discrete_Random_Agent:
         
@@ -388,11 +412,6 @@ class Discrete_Random_Agent:
             old_state = self.state
             new_state, reward, is_done = self.env.step(action)
             
-            """if is_done:
-                self.env.reset()
-                self.state = None
-            else:
-                self.state = new_state"""
             return old_state, action, reward, new_state, is_done
         
         def test(self, start_idx, end_idx):
