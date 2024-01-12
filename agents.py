@@ -169,10 +169,11 @@ from stockenv import DiscretizedOHLCVEnv, ContinuousOHLCVEnv
 class Discrete_QtabAgent:
     def __init__(self,ohlcv_data:pd.DataFrame,
                  bins_per_feature:list,
-                 bin_padding:float,
+                 bin_padding:float,                 
                  training_idxs:list,
                  num_training_episodes:int,
                  testing_idxs:list,
+                 ohlcv_behaviour:str = 'raw',
                  epsilon: float = 0.1,
                  alpha: float = 0.1,
                  gamma: float = 0.9) -> None:
@@ -197,7 +198,7 @@ class Discrete_QtabAgent:
 
         #Initialize Enviroment. 
         self.env = DiscretizedOHLCVEnv(ohlcv_data[["open","high","low",'close',"volume"]].to_numpy(), 
-                                         bins_per_feature,bin_padding)
+                                         bins_per_feature,ohlcv_behaviour,bin_padding)
 
     def sample_env(self,initial_epsilon, final_epsilon, training_episode):
         # Choose action using epsilon-greedy policy
@@ -327,6 +328,7 @@ class Discrete_Buy_Hold_Agent:
         def __init__(self,ohlcv_data:pd.DataFrame,
                      bins_per_feature:list,
                      bin_padding:float,
+                     ohlcv_behaviour:str = 'raw',
                      training_idxs:list = None,
                      testing_idxs:list = None) -> None:
         
@@ -341,7 +343,7 @@ class Discrete_Buy_Hold_Agent:
 
             #Initialize Enviroment. 
             self.env = DiscretizedOHLCVEnv(ohlcv_data[["open","high","low",'close',"volume"]].to_numpy(), 
-                                         bins_per_feature,bin_padding)
+                                         bins_per_feature, ohlcv_behaviour, bin_padding,)
             
         
         def sample_env(self,start_idx, final_idx):
@@ -388,6 +390,7 @@ class Discrete_Random_Agent:
                      bins_per_feature:list,
                      bin_padding:float,
                      training_idxs:list = None,
+                     ohlcv_behaviour:str = 'raw',
                      testing_idxs:list = None) -> None:
         
             # Agent Paramters 
@@ -401,7 +404,7 @@ class Discrete_Random_Agent:
 
             #Initialize Enviroment. 
             self.env = DiscretizedOHLCVEnv(ohlcv_data[["open","high","low",'close',"volume"]].to_numpy(), 
-                                         bins_per_feature,bin_padding)
+                                         bins_per_feature,ohlcv_behaviour,bin_padding)
             
         
         def sample_env(self):

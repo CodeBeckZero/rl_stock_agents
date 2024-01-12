@@ -3,6 +3,7 @@ import numpy as np
 import quantstats as qs
 import pandas as pd
 import logging
+from matplotlib.offsetbox import AnchoredOffsetbox, TextArea, VPacker
 
 def agent_stock_performance(stock_price_ts: np.ndarray, trade_ts: np.ndarray,
                             stock_name: str, agent_name:str, 
@@ -215,3 +216,202 @@ def agent_stock_performance(stock_price_ts: np.ndarray, trade_ts: np.ndarray,
        
     return results
 
+def update_trade_df(df, trade_seq:list):
+    """
+    Update a DataFrame based on a sequence of trade actions.
+
+    Parameters:
+    - df (pd.DataFrame): The original DataFrame to be updated.
+    - trade_seq (list): List of trade actions, where each element is 'B' (Buy) or 'S' (Sell).
+
+    Returns:
+    pd.DataFrame: An updated DataFrame with incremented trade actions and position counts.
+
+    Raises:
+    AssertionError: If any trade action column is missing in the DataFrame.
+    """
+
+    assert all(column in df.columns for column in set(trade_seq)), "Columns are missing in DataFrame"
+    assert df.shape[0] == len(trade_seq), f'Trade action list len{len(trade_seq)}!= DF rows{df.shape[0]}' 
+    
+    updated_df = df.copy()
+    pos_list = position(trade_seq)
+    for idx,action in enumerate(trade_seq):
+        
+        updated_df[action].iloc[idx] += 1
+        updated_df['Position_Count'].iloc[idx] += pos_list[idx]
+    
+    return updated_df
+
+
+def position(trade_seq:list):
+    """
+    Calculate positions based on a sequence of trade actions.
+
+    Parameters:
+    - trade_seq (list): List of trade actions, where each element is 'B' (Buy) or 'S' (Sell).
+
+    Returns:
+    np.ndarray: An array indicating positions, where 1 represents holding a position, and 0 represents no position.
+
+    Raises:
+    AssertionError: If the number of buy and sell actions in the trade sequence is not equal.
+    """
+    trade_arr = np.array(trade_seq)
+    buy_idx = np.where(trade_arr == 'B')[0]
+    sell_idx = np.where(trade_arr == 'S')[0]
+
+    assert len(buy_idx) == len(sell_idx),\
+          "Trade action input didn't produce equal buy and sell actions"
+
+    pos_list = np.zeros(len(trade_seq),dtype=int)
+
+    for buy, sell in list(zip(buy_idx,sell_idx)):
+        pos_list[buy:sell] = 1
+    
+    return pos_list
+
+def aggregate_trade_performance(df_trade_action:pd.DataFrame,
+                            stock_name: str, 
+                            agent_name:str,
+                            num_tests: int, 
+                            display_graph: bool = False, 
+                            save_graphic: bool = False,
+                            path_file = None):
+    """
+    Aggregate and visualize trade performance across multiple tests.
+
+    Parameters:
+    - df_trade_action (pd.DataFrame): DataFrame containing trade actions data.
+    - stock_name (str): Name of the stock.
+    - agent_name (str): Name of the trading agent.
+    - num_tests (int): Number of tests.
+    - display_graph (bool, optional): Whether to display the graph. Default is False.
+    - save_graphic (bool, optional): Whether to save the graph. Default is False.
+    - path_file (str, optional): Path and filename to save the graph.
+
+    Returns:
+    None
+
+    Raises:
+    AssertionError: If `save_graphic` is True but no path/filename is provided.
+    """
+
+    if display_graph is False and save_graphic is False:    
+        return 
+
+    test_idx = [0,df_trade_action.shape[0]]
+    df_trade_action['S'] = 0-df_trade_action['S']
+
+    # Create a figure and a 2x1 grid of subplots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [3, 1]})
+
+    # Line graph for 'close' column
+    ax1.plot(df_trade_action['close'], label='Close Price', color='black')
+    ax1.set_xticks([])
+    ax1.set_xticklabels([])
+    ax1.set_xlim(test_idx[0],test_idx[-1])
+    ax1.set_ylabel(f'{stock_name} Price')
+    ax1.tick_params('y', colors='black')
+    ax1.set_title(f'{agent_name}: {stock_name} Trade Results Across {num_tests} Tests')
+
+
+    # Create a second y-axis for stacked bar graph
+    ax1a = ax1.twinx()
+    buy_values = df_trade_action['B'].values
+    sell_values = df_trade_action['S'].values
+    plot_min_max =  buy_values.max() * 3
+    ax1a.bar(df_trade_action.index, buy_values, color='green', alpha=0.7, width=1)
+    ax1a.bar(df_trade_action.index, sell_values, color='red', alpha=0.7, width=1)
+    ax1a.set_xticks([])
+    ax1a.set_xticklabels([])
+
+    # Set y-axis label with different colors
+    ybox1 = TextArea("Sell ", textprops=dict(color="red", size=10,rotation=90,ha='left',va='bottom'))
+    ybox2 = TextArea(" & ",     textprops=dict(color="black", size=10,rotation=90,ha='left',va='bottom'))
+    ybox3 = TextArea("Buy", textprops=dict(color="green", size=10,rotation=90,ha='left',va='bottom'))
+    ybox4 = TextArea("Actions", textprops=dict(color="black", size=10,rotation=90,ha='left',va='bottom'))
+
+
+    ybox_1 = VPacker(children=[ybox3, ybox2, ybox1],align="center", pad=0, sep=5)
+
+    anchored_ybox1 = AnchoredOffsetbox(loc=6, child=ybox_1, pad=0., frameon=False, bbox_to_anchor=(1.03,0.495), 
+                                    bbox_transform=ax1a.transAxes, borderpad=0.)
+    ax1a.add_artist(anchored_ybox1)
+
+    ybox4 = TextArea("Actions", textprops=dict(color="black", size=10,rotation=90,ha='left',va='bottom'))
+    ybox_2 = VPacker(children=[ybox4],align="center", pad=0, sep=5)
+    anchored_ybox2 = AnchoredOffsetbox(loc=6, child=ybox_2, pad=0., frameon=False, bbox_to_anchor=(1.05,0.495), 
+                                    bbox_transform=ax1a.transAxes, borderpad=0.)
+
+    ax1a.add_artist(anchored_ybox2)
+
+    ax1a.set_ylim(-plot_min_max,plot_min_max)
+
+    custom_labels = [int(float(str(tick).replace('-', ''))) for tick in ax1a.get_yticks()]
+   
+
+    for label, tick in list(zip(ax1a.get_yticklabels(), ax1a.get_yticks())):
+        formatted_tick = float(str(tick).replace('−', ''))
+  
+        if int(formatted_tick) > 0:
+            label.set_color('green')
+        elif int(formatted_tick) < 0:
+            label.set_text(f'coke')
+            label.set_color('red')
+        else:
+            label.set_color('black')
+
+        # Modify the label to display the absolute value
+
+    ax1a.set_yticklabels(custom_labels)
+
+
+    # Line graph for position count
+    ax2.plot(df_trade_action['Position_Count']/num_tests, label='Position Count', color='orange')
+    ax2.set_xlabel('Time Step$_{Test\ Range}$ ')
+    ax2.set_ylabel('Position Probability')
+    ax2.set_xlim(test_idx[0],test_idx[-1])
+
+    plt.subplots_adjust(hspace=0.0)
+    plt.tight_layout()
+    if save_graphic:
+        assert path_file is not None, "No path/filename provided"
+
+        fig.savefig(path_file)
+
+        if not display_graph:
+            plt.close()
+            return        
+    
+    plt.show()
+    plt.close()
+    return
+
+def graph_input(stock_prices,
+                stock_name: str,
+                display_graph: bool = False, 
+                save_graphic: bool = False,
+                path_file = None):
+    
+    if display_graph is False and save_graphic is False:    
+        return 
+
+    fig, ax = plt.subplots()
+    ax.plot(stock_prices, color='grey')
+    ax.set_xlim(0,len(stock_prices))
+    plt.title(f'{stock_name} Input Data')
+    plt.ylabel(f'Price')
+    plt.xlabel('Time Steps')
+    print('here')
+    if save_graphic:
+        assert path_file is not None, "No path/filename provided"
+        fig.savefig(path_file)
+
+        if not display_graph:
+            plt.close()
+            return        
+
+    plt.show()
+    plt.close()
+    return

@@ -128,7 +128,7 @@ class ContinuousOHLCVEnv(gym.Env):
 
 class DiscretizedOHLCVEnv(gym.Env):
        
-    def __init__(self, ohlcv_data:pd.DataFrame,bins_per_feature:list,
+    def __init__(self, ohlcv_data:pd.DataFrame,bins_per_feature:list, behaviour,
                  bin_padding: float = 0.0, commission_rate: float = 0.005, 
                  initial_cash=1000000):
         self.ohlcv_raw_data = ohlcv_data
@@ -139,7 +139,9 @@ class DiscretizedOHLCVEnv(gym.Env):
         self.observation_space = spaces.MultiDiscrete([bins_per_feature] * len(ohlcv_data[0])) # Shape = (Open, High, Low, Close, Volume)
         self.ohlcv_binned_data = self.discretize_ohlcv(self.ohlcv_raw_data,
                                                        self.bins_per_feature,
-                                                       bin_padding)
+                                                       bin_padding,
+                                                       behaviour)
+        
         self.max_idx = ohlcv_data.shape[0] -1
         self.finish_idx = self.max_idx
         self.start_idx = 0
@@ -158,7 +160,7 @@ class DiscretizedOHLCVEnv(gym.Env):
         if self.cash_in_hand > self.stock_price:
             self.available_actions = ('H','B')
         else:
-            self.available_actions = ('H','B')
+            self.available_actions = ('H')
         self.step_info = []
     
     def step(self, action):
@@ -250,9 +252,29 @@ class DiscretizedOHLCVEnv(gym.Env):
     def get_step_data(self):
         return pd.DataFrame(self.step_info)  # Generate a DataFrame from stored step information
 
-    def discretize_ohlcv(self, data, bins_for_feature, bin_padding):
+    def discretize_ohlcv(self, data, bins_for_feature, bin_padding,behaviour):
         discretized_data = []
-        for column,num_bins in zip(data.T, bins_for_feature):  # Transpose to iterate through columns
+        valid_options = ['raw','diff','1_3_4_ma__v']
+        assert behaviour in valid_options, f'Invalid Behaviour Option: {behaviour}'
+        if behaviour == 'raw':
+            data_to_bin = data
+        elif behaviour == 'diff':
+            data_to_bin = np.diff(data)
+        elif behaviour == '1_3_4_ma__v':
+            df = pd.DataFrame(data, columns=['open', 'high', 'low', 'close', 'volume']) ##need to change this for later
+            df_new = df[['close','volume']].copy()
+            df_new['percentage_change'] = df['close'].pct_change()
+            
+            # 3-day Moving Average of Percentage Change
+            df_new['3_day_ma_percentage_change'] = df_new['percentage_change'].rolling(window=3).mean()
+            df_new['5_day_ma_percentage_change'] = df_new['percentage_change'].rolling(window=5).mean()
+
+            # Replace NaN values with zeros
+            df_new.fillna(0, inplace=True)
+
+            data_to_bin = df_new.values
+
+        for column,num_bins in zip(data_to_bin.T, bins_for_feature):  # Transpose to iterate through columns
             min_val = np.min(column) * ( 1 - bin_padding)
             max_val = np.max(column) * ( 1 + bin_padding)
             bin_width = (max_val - min_val) / num_bins
